@@ -1,0 +1,9 @@
+install VMWare Workstation 14
+- yum install kernel-headers kernel-devel
+- yum groupinstall "Development tools"
+- if need:
+	yum -y remove kernel-devel*
+	yum -y install kernel-devel*
+
+
+
