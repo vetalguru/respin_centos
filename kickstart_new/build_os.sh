@@ -4,6 +4,7 @@
 BUILD_DIR_NAME="kickstart_build"
 MOUNT_POINT_NAME="mount_point"
 CDROM_DEVICE="/dev/cdrom"
+BUILD_KS_SCRIPT_NAME="build_ks_file.sh"
 
 DIST_NAME="GigaOS"
 DIST_VERSION="7"
@@ -17,6 +18,7 @@ BUILD_DIR=${ROOT_DIR}/${BUILD_DIR_NAME}
 MOUNT_POINT=${ROOT_DIR}/${MOUNT_POINT_NAME}
 ISOLINUX_DIR=${BUILD_DIR}/isolinux
 FULL_ISOLINUX_CFG_FILE_NAME=${ISOLINUX_DIR}/isolinux.cfg
+FULL_BUILD_KS_SCRIPT_PATH=${ROOT_DIR}/${BUILD_KS_SCRIPT_NAME}
 
 
 
@@ -53,11 +55,6 @@ rm -rf ${ROOT_DIR}/*.iso
 
 
 
-# create mount point
-mkdir -p ${MOUNT_POINT}
-
-
-
 
 # create folderers for iso file
 mkdir -p ${BUILD_DIR}
@@ -71,6 +68,8 @@ mkdir -p ${BUILD_DIR}/Packages
 
 
 # mount general cd
+echo "Mount origin cd disk to ${MOUNT_POINT}"
+mkdir -p ${MOUNT_POINT}
 mount -t iso9660 -o loop,ro ${CDROM_DEVICE} ${MOUNT_POINT}/
 
 
@@ -107,8 +106,12 @@ gunzip ${BUILD_DIR}/comps.xml.gz
 
 
 
-# copy ks file
-rsync -av /root/anaconda-ks.cfg ${BUILD_DIR}/ks/ks.cfg
+# Create/copy ks file
+if [ -f "${FULL_BUILD_KS_SCRIPT_PATH}" ]; then
+    source ${FULL_BUILD_KS_SCRIPT_PATH}
+else
+    rsync -av /root/anaconda-ks.cfg ${BUILD_DIR}/ks/ks.cfg
+fi
 
 
 
@@ -189,9 +192,6 @@ mkisofs -r -R -J -T -v \
 FULL_ISO_FILE_NAME=${ROOT_DIR}/${ISOFILE}
 echo "Signing file ${FULL_ISO_FILE_NAME}"
 implantisomd5 "${FULL_ISO_FILE_NAME}"
-
-
-
 
 exit 0
 
