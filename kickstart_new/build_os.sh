@@ -5,6 +5,9 @@ BUILD_DIR_NAME="kickstart_build"
 MOUNT_POINT_NAME="mount_point"
 CDROM_DEVICE="/dev/cdrom"
 BUILD_KS_SCRIPT_NAME="build_ks_file.sh"
+VMWARE_TOOLS_DIR_NAME="vmware_tools"
+VMWARE_MOUNT_POINT="vmware_mount_point"
+VMWARE_ARCH_FILE_NAME="vmware_tools.tar.gz"
 
 DIST_NAME="GigaOS"
 DIST_VERSION="7"
@@ -20,6 +23,9 @@ ISOLINUX_DIR=${BUILD_DIR}/isolinux
 FULL_ISOLINUX_CFG_FILE_NAME=${ISOLINUX_DIR}/isolinux.cfg
 FULL_BUILD_KS_SCRIPT_PATH=${ROOT_DIR}/${BUILD_KS_SCRIPT_NAME}
 
+FULL_VMWARE_TOOLS_DIR_PATH=${BUILD_DIR}/${VMWARE_TOOLS_DIR_NAME}
+FULL_VMWARE_MOUNT_POINT=${ROOT_DIR}/${VMWARE_MOUNT_POINT}
+FULL_VMWARE_TOOLS_ISO_FILE_PATH="/usr/lib/vmware/isoimages/linux.iso"
 
 
 ISOFILE="${DIST_NAME}-${DIST_VERSION}-${DIST_MACHINE}.iso"
@@ -102,6 +108,25 @@ rsync -av ${MOUNT_POINT}/LiveOS/ ${BUILD_DIR}/LiveOS/
 # copy comps.xml
 find ${MOUNT_POINT}/repodata -name '*comps.xml.gz' -exec cp {} ${BUILD_DIR}/comps.xml.gz \;
 gunzip ${BUILD_DIR}/comps.xml.gz
+
+
+
+# copy vmware tools
+if [ -f "${FULL_VMWARE_TOOLS_ISO_FILE_PATH}" ]; then
+    echo "Copy VMWAre tools to iso image"
+    mkdir -p ${FULL_VMWARE_MOUNT_POINT}
+    mount -t iso9660  ${FULL_VMWARE_TOOLS_ISO_FILE_PATH} ${FULL_VMWARE_MOUNT_POINT}
+
+    mkdir -p ${FULL_VMWARE_TOOLS_DIR_PATH}
+    rsync -avP ${FULL_VMWARE_MOUNT_POINT}/VMwareTools-*.tar.gz ${FULL_VMWARE_TOOLS_DIR_PATH}/${VMWARE_ARCH_FILE_NAME}
+
+    umount ${FULL_VMWARE_MOUNT_POINT}
+    rm -rf ${FULL_VMWARE_MOUNT_POINT}
+else
+    echo "Unable to find VMWare Tools (${FULL_VMWARE_TOOLS_ISO_FILE_PATH})"
+    exit 1
+fi
+
 
 
 

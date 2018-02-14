@@ -7,6 +7,10 @@ ANACONDA_ROOT_PASS="AppAssure"
 ANACONDA_BOOT_DRIVE="sda"
 ANACONDA_NETWORK_DEVICE="enno16777736"
 
+VMWARE_ROOT_DIR="/root"
+VMWARE_ARCH_NAME="vmware_tools.tar.gz"
+VMWARE_INSTALL_DIR_NAME="vmware_tools"
+VMWARE_MOUNT_POINT="vmware_mount_point"
 
 ROOT_DIR="$PWD"
 NOW=$(date +'%r %d/%m/%Y')
@@ -23,7 +27,8 @@ auth --enableshadow -passalgo=sha512
 cdrom
 
 # Use grafical install
-graphical
+#graphical
+cmdline
 
 # Run the Setup Agent on first boot
 firstboot --disabled
@@ -63,7 +68,7 @@ autopart --type=lvm
 clearpart --all
 
 # Reboot after install
-reboot --eject
+#reboot --eject
 
 # Accept license
 eula --agreed
@@ -90,12 +95,45 @@ selinux --disabled
 @print-client
 @x11
 kexec-tools
-
 %end
 
+# Config the kdump kernel crash dumping mechanism
 %addon com_redhat_kdump --enable --reserve-mb='auto'
+%end
+
+%post --log=/root/ks-post.log
+
+#
+# install vmware tools     =============================
+#
+
+# copy vmware tools
+mkdir -p $VMWARE_ROOT_DIR/${VMWARE_INSTALL_DIR_NAME}
+mkdir -p ${VMWARE_ROOT_DIR}/${VMWARE_MOUNT_POINT}
+mount /dev/cdrom ${VMWARE_ROOT_DIR}/${VMWARE_MOUNT_POINT}/
+rsync -av ${VMWARE_ROOT_DIR}/${VMWARE_MOUNT_POINT}/${VMWARE_INSTALL_DIR_NAME}/${VMWARE_ARCH_NAME} \
+${VMWARE_ROOT_DIR}/${VMWARE_INSTALL_DIR_NAME}
+umount ${VMWARE_ROOT_DIR}/${VMWARE_MOUNT_POINT}/
+
+# unpack vmware tools
+tar -zxf ${VMWARE_ROOT_DIR}/${VMWARE_INSTALL_DIR_NAME}/${VMWARE_ARCH_NAME}
+
+# install vmware tools
+yum -y install kernel-devel gcc dracut make perl fuse-libs
+chmod +x ${VMWARE_ROOT_DIR}/${VMWARE_INSTALL_DIR_NAME}/vmware_tools-distrib/vmware-install.pl
+. ${VMWARE_ROOT_DIR}/${VMWARE_INSTALL_DIR_NAME}/vmware_tools-distrib/vmware-install.pl --default
+
+# clear data after installation
+unmount ${VMWARE_ROOT_DIR}/${VMWARE_MOUNT_POINT}/ || /bin/true
+rm -rf ${VMWARE_ROOT_DIR}/${VMWARE_INSTALL_DIR_NAME}
+rm -rf ${VMWARE_ROOT_DIR}/${VMWARE_MOUNT_POINT}
 
 %end
+
+# Reboot after install
+reboot --eject
+
+
 EOT
 
 
