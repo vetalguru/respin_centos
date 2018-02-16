@@ -246,16 +246,117 @@ if [ ${NEED_BUILD_OS} = true ]; then
 
 
     # signing the iso file
-    FULL_ISO_FILE_NAME=${GIGAOS_BUILD_ISO_BUILD_DIR}/${GIGAOS_BUILD_ISO_ISOFILE}
-    echo "Signing file ${FULL_ISO_FILE_NAME}"
-    implantisomd5 "${FULL_ISO_FILE_NAME}"
+    echo "Signing file ${GIGAOS_BUILD_ISO_RESULT_ISO_FILE}"
+    implantisomd5 "${GIGAOS_BUILD_ISO_RESULT_ISO_FILE}"
 
 fi
 
 
-#if [ ${NEED_CREATE_OVF} = true ]; then
-    # NEED_TO_PROCESS
-#fi
+if [ ${NEED_CREATE_OVF} = true ]; then
+    # remove old data
+    rm -rf ${GIGAOS_BUILD_OVF_BUILD_DIR}
+
+    # create build dir
+    mkdir -p ${GIGAOS_BUILD_OVF_BUILD_DIR}
+
+    # create *.VMX file
+    /bin/cat <<EOM >${FULL_VHD_FILE_PATH}
+#!/usr/bin/vmware
+.encoding = "UTF-8"
+config.version = "8"
+virtualHW.version = "14"
+pciBridge0.present = "TRUE"
+pciBridge4.present = "TRUE"
+pciBridge4.virtualDev = "pcieRootPort"
+pciBridge4.functions = "8"
+pciBridge5.present = "TRUE"
+pciBridge5.virtualDev = "pcieRootPort"
+pciBridge5.functions = "8"
+pciBridge6.present = "TRUE"
+pciBridge6.virtualDev = "pcieRootPort"
+pciBridge6.functions = "8"
+pciBridge7.present = "TRUE"
+pciBridge7.virtualDev = "pcieRootPort"
+pciBridge7.functions = "8"
+vmci0.present = "TRUE"
+hpet0.present = "TRUE"
+usb.vbluetooth.startConnected = "TRUE"
+displayName = "${GIGAOS_BUILD_OVF_DISPLAY_NAME}"
+guestOS = "${GIGAOS_BUILD_OVF_GUEST_OS}"
+nvram = "${GIGAOS_BUILD_OVF_DISPLAY_NAME}.nvram"
+virtualHW.productCompatibility = "hosted"
+powerType.powerOff = "soft"
+powerType.powerOn = "soft"
+powerType.suspend = "soft"
+powerType.reset = "soft"
+tools.syncTime = "FALSE"
+sound.autoDetect = "TRUE"
+sound.fileName = "-1"
+sound.present = "TRUE"
+vcpu.hotadd = "TRUE"
+memsize = "1024"
+mem.hotadd = "TRUE"
+scsi0.virtualDev = "lsilogic"
+scsi0.present = "TRUE"
+scsi0:0.fileName = "${GIGAOS_BUILD_OVF_DISK_FILE_NAME}"
+scsi0:0.present = "TRUE"
+ide1:0.deviceType = "cdrom-image"
+ide1:0.fileName = "${GIGAOS_BUILD_OVF_ISO_FILE}"
+ide1:0.present = "TRUE"
+usb.present = "TRUE"
+ehci.present = "TRUE"
+ethernet0.connectionType = "nat"
+ethernet0.addressType = "generated"
+ethernet0.virtualDev = "e1000"
+serial0.fileType = "thinprint"
+serial0.fileName = "thinprint"
+ethernet0.present = "TRUE"
+serial0.present = "TRUE"
+extendedConfigFile = "${GIGAOS_BUILD_OVF_DISPLAY_NAME}.vmxf"
+floppy0.present = "FALSE"
+uuid.bios = "56 4d e6 46 a4 6e 49 5c-23 9e 02 2d e2 ab 2c 04"
+uuid.location = "56 4d e6 46 a4 6e 49 5c-23 9e 02 2d e2 ab 2c 04"
+migrate.hostlog = "./${GIGAOS_BUILD_OVF_DISPLAY_NAME}.hlog"
+scsi0:0.redo = ""
+pciBridge0.pciSlotNumber = "17"
+pciBridge4.pciSlotNumber = "21"
+pciBridge5.pciSlotNumber = "22"
+pciBridge6.pciSlotNumber = "23"
+pciBridge7.pciSlotNumber = "24"
+scsi0.pciSlotNumber = "16"
+usb.pciSlotNumber = "32"
+ethernet0.pciSlotNumber = "33"
+sound.pciSlotNumber = "34"
+ehci.pciSlotNumber = "35"
+vmci0.pciSlotNumber = "36"
+ethernet0.generatedAddress = "00:0c:29:ab:2c:04"
+ethernet0.generatedAddressOffset = "0"
+vmci0.id = "-492098556"
+monitor.phys_bits_used = "43"
+vmotion.checkpointFBSize = "33554432"
+vmotion.checkpointSVGAPrimarySize = "33554432"
+cleanShutdown = "FALSE"
+softPowerOff = "FALSE"
+usb:1.speed = "2"
+usb:1.present = "TRUE"
+usb:1.deviceType = "hub"
+usb:1.port = "1"
+usb:1.parent = "-1"
+tools.remindInstall = "TRUE"
+usb:0.present = "TRUE"
+usb:0.deviceType = "hid"
+usb:0.port = "0"
+usb:0.parent = "-1"
+EOM
+
+    # create disk for vm
+    vmware-vdiskmanager -c -t 0 -s "${GIGAOS_BUILD_OVF_DISK_SIZE}" -a buslogic "${GIGAOS_BUILD_OVF_DISK_FILE_NAME}"
+
+    # NEED TO WAIT FOR OS INSTALLATION (vmrun)
+    # NEED TO DO POSTINSTALL STEPS
+    # NEED TO STOP VM
+    # NEED TO CONVERT VM to OVF
+fi
 
 
 exit 0
