@@ -19,9 +19,9 @@ source ./scripts/common.sh
 
 export GIGAOS_CONFIG_FILE=${GIGAOS_ROOT_DIR}/config.cfg
 
-NEED_RESPIN_RPMS=true
+NEED_RESPIN_RPMS=false
 NEED_REPACK_STAGE=false
-NEED_BUILD_OS=false
+NEED_BUILD_OS=true
 NEED_CREATE_OVF=false
 
 # check if user is root
@@ -166,10 +166,12 @@ if [ ${NEED_BUILD_OS} = true ]; then
     if [ -f ${GIGAOS_BUILD_ISO_VMWARE_TOOLS_ISO_FILE_PATH} ]; then
         echo "Copy vmware tools to iso dir"
         mkdir -p ${GIGAOS_BUILD_ISO_VMWARE_MOUNT_POINT}
-        mount -t iso9660 ${GIGAOS_BUILD_ISO_VMWARE_TOOLS_ISO_FILE_PATH} ${GIGAOS_BUILD_ISO_VMWARE_MOUNT_POINT}
+
+        echo "mount ${GIGAOS_BUILD_ISO_VMWARE_TOOLS_ISO_FILE_PATH} to ${GIGAOS_BUILD_ISO_VMWARE_MOUNT_POINT}"
+        mount ${GIGAOS_BUILD_ISO_VMWARE_TOOLS_ISO_FILE_PATH} ${GIGAOS_BUILD_ISO_VMWARE_MOUNT_POINT}
 
         mkdir -p ${GIGAOS_BUILD_ISO_VMWARE_TOOLS_DIR}
-        rsunc -avP ${GIGAOS_BUILD_ISO_VMWARE_MOUNT_POINT}/VMWareTools-*.tar.gz "${GIGAOS_BUILD_ISO_VMWARE_TOOLS_DIR}/${GIGAOS_BUILD_ISO_VMWARE_ARCH_FILE_NAME}"
+        rsync -avP ${GIGAOS_BUILD_ISO_VMWARE_MOUNT_POINT}/VMwareTools-*.tar.gz "${GIGAOS_BUILD_ISO_VMWARE_TOOLS_DIR}/${GIGAOS_BUILD_ISO_VMWARE_ARCH_FILE_NAME}"
 
         umount ${GIGAOS_BUILD_ISO_VMWARE_MOUNT_POINT}
         rm -rf ${GIGAOS_BUILD_ISO_VMWARE_MOUNT_POINT}
@@ -178,33 +180,148 @@ if [ ${NEED_BUILD_OS} = true ]; then
         exit 1
     fi
 
-    # create or copy KS-file
-    if [ -f "${GIGAOS_BUILD_ISO_KS_SCRIPT}" ]; then
-        source ${GIGAOS_BUILD_ISO_KS_SCRIPT}
-    else
-        echo "Using standart anaconda-ks.cfg file"
-        rsync -avP /root/anaconda-ks.cfg ${GIGAOS_BUILD_ISO_ROOT_ISO}/ks/ks.cfg
-    fi
+    # create  KS-file
+    mkdir -p ${GIGAOS_BUILD_ISO_ROOT_KS}
+    echo "#  ${GIGAOS_BUILD_ISO_ISODATE}" >  ${GIGAOS_BUILD_ISO_ROOT_KS_CFG}
+    cat <<EOT >> ${GIGAOS_BUILD_ISO_ROOT_KS_CFG}
+# System authorization information
+auth --enableshadow -passalgo=sha512
 
-    # add ks-file to default item in installer menu
-    INSTALL_MENU_ITEM_STRING="label check_
-    menu label Test this ^media & install CentOS 7
-    menu default
-    kernel vmlinuz
-    append initrd=initrd.img inst.stage2=hd:LABEL=CentOS\x207\x20x86_64 rd.live.check inst.ks=cdrom:/dev/cdrom:/ks/ks.cfg
+# Use CDROM installation media
+cdrom
 
-    menu end"
+# Use grafical install
+#graphical
+cmdline
+
+# Run the Setup Agent on first boot
+firstboot --disabled
+ignoredisk --only-use=${ANACONDA_BOOT_DRIVE}
+
+# Keyboard layouts
+keyboard --vckeymap=us --xlayouts='us'
+
+# System language
+lang en_US.UTF-8
+
+# Network information
+network --bootproto=dhcp --device=${ANACONDA_NETWORK_DEVICE} --ipv6=auto --activate
+network --hostname=${ANACONDA_HOST_NAME}
+
+# Root password
+rootpw "${ANACONDA_ROOT_PASS}"
+
+# Users settings
+user --groups=wheel --name="${ANACONDA_USER_NAME}" --password="${ANACONDA_USER_PASS}"
+
+# System services
+services --disabled="chronyd"
+
+# System timezone
+timezone America/New_York --isUtc --nontp
+
+# X Window System configuration information
+xconfig --startxonboot
+
+# System bootloader configuration
+bootloader --append=" crashkernel=auto" --location=mbr --boot-drive=${ANACONDA_BOOT_DRIVE}
+autopart --type=lvm
+
+# Partition clearing information
+#clearpart --none --initlabel
+clearpart --all
+
+# Reboot after install
+#reboot --eject
+
+# Accept license
+eula --agreed
+
+selinux --disabled
+
+%packages
+@^kde-desktop-environment
+@base
+@core
+@desktop-debugging
+@dial-up
+@directory-client
+@fonts
+@guest-agents
+@guest-desktop-agents
+@input-methods
+@internet-browser
+@java-platform
+@kde-desktop
+@multimedia
+@network-file-system-client
+@networkmanager-submodules
+@print-client
+@x11
+kexec-tools
+%end
+
+# Config the kdump kernel crash dumping mechanism
+%addon com_redhat_kdump --enable --reserve-mb='auto'
+%end
+
+%post --log=/root/ks-post.log
+
+#
+# install vmware tools     =============================
+#
+
+# copy vmware tools
+mkdir -p $VMWARE_ROOT_DIR/${VMWARE_INSTALL_DIR_NAME}
+mkdir -p ${VMWARE_ROOT_DIR}/${VMWARE_MOUNT_POINT}
+mount /dev/cdrom ${VMWARE_ROOT_DIR}/${VMWARE_MOUNT_POINT}/
+rsync -av ${VMWARE_ROOT_DIR}/${VMWARE_MOUNT_POINT}/${VMWARE_INSTALL_DIR_NAME}/${VMWARE_ARCH_NAME} \
+${VMWARE_ROOT_DIR}/${VMWARE_INSTALL_DIR_NAME}/${VMWARE_ARCH_NAME}
+umount ${VMWARE_ROOT_DIR}/${VMWARE_MOUNT_POINT}/
+
+# unpack vmware tools
+tar -zxf ${VMWARE_ROOT_DIR}/${VMWARE_INSTALL_DIR_NAME}/${VMWARE_ARCH_NAME} \
+-C ${VMWARE_ROOT_DIR}/${VMWARE_INSTALL_DIR_NAME}/
+
+# install vmware tools
+yum -y install kernel-devel gcc dracut make perl fuse-libs
+chmod +x ${VMWARE_ROOT_DIR}/${VMWARE_INSTALL_DIR_NAME}/vmware-tools-distrib/vmware-install.pl
+# start script
+. ${VMWARE_ROOT_DIR}/${VMWARE_INSTALL_DIR_NAME}/vmware-tools-distrib/vmware-install.pl --default
+
+# clear data after installation
+umount ${VMWARE_ROOT_DIR}/${VMWARE_MOUNT_POINT}/ || /bin/true
+rm -rf ${VMWARE_ROOT_DIR}/${VMWARE_INSTALL_DIR_NAME}
+rm -rf ${VMWARE_ROOT_DIR}/${VMWARE_MOUNT_POINT}
+
+#
+# set autologin for user
+#
+
+%end
+
+# Reboot after install
+reboot --eject
+
+EOT
+
 
     # remove unused menu items
     chmod +w ${GIGAOS_BUILD_ISO_ROOT_ISOLINUX_CFG}
     sed -i '/label/,$d' ${GIGAOS_BUILD_ISO_ROOT_ISOLINUX_CFG}
 
-    cat <<EOT >> ${GIGAOS_BUILD_ISO_ROOT_ISOLINUX_CFG}
-    ${INSTALL_MENU_ITEM_STRING}
-    EOT
+    # add ks-file to default item in installer menu
+    echo 'label check_' >> ${GIGAOS_BUILD_ISO_ROOT_ISOLINUX_CFG}
+    echo '    menu label Test this ^media & install CentOS 7' >> ${GIGAOS_BUILD_ISO_ROOT_ISOLINUX_CFG}
+    echo '    menu default' >> ${GIGAOS_BUILD_ISO_ROOT_ISOLINUX_CFG}
+    echo '    kernel vmlinuz' >> ${GIGAOS_BUILD_ISO_ROOT_ISOLINUX_CFG}
+    echo '    append initrd=initrd.img inst.stage2=hd:LABEL=CentOS\x207\x20x86_64 rd.live.check inst.ks=cdrom:/dev/cdrom:/ks/ks.cfg' >> ${GIGAOS_BUILD_ISO_ROOT_ISOLINUX_CFG}
+    echo '' >> ${GIGAOS_BUILD_ISO_ROOT_ISOLINUX_CFG}
+    echo 'menu end' >> ${GIGAOS_BUILD_ISO_ROOT_ISOLINUX_CFG}
+
 
     # copy rpms
-    rsync -av ${GIGAOS_BUILD_ISO_MOUNT_POINT}/Packages/ ${GIGAOS_BUILD_ISO_ROOT_ISO}/Packages/
+    rsync -avP ${GIGAOS_BUILD_ISO_MOUNT_POINT}/Packages/ ${GIGAOS_BUILD_ISO_ROOT_ISO}/Packages/
 
     # create repodata
     cd ${GIGAOS_BUILD_ISO_ROOT_ISO}/
@@ -242,7 +359,7 @@ if [ ${NEED_BUILD_OS} = true ]; then
         -c isolinux/boot.cat \
         -x "lost+found" \
         --joliet-long \
-        -o "${GIGAOS_BUILD_ISO_ISOFILE}" "${GIGAOS_BUILD_ISO_ROOT_ISO}/"
+        -o "${GIGAOS_BUILD_ISO_RESULT_ISO_FILE}" "${GIGAOS_BUILD_ISO_ROOT_ISO}/"
 
 
     # signing the iso file
