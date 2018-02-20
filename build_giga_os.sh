@@ -22,6 +22,7 @@ export GIGAOS_CONFIG_FILE=${GIGAOS_ROOT_DIR}/config.cfg
 NEED_RESPIN_RPMS=false
 NEED_REPACK_STAGE=false
 NEED_BUILD_OS=true
+NEED_TO_USE_RESPIN_RPMS=true
 NEED_CREATE_OVF=false
 
 # check if user is root
@@ -70,10 +71,12 @@ if [ ${NEED_RESPIN_RPMS} = true ]; then
     rsync -avP "${GIGAOS_RESPIN_FROLDER_WITH_SRPMS}"/ "${FULL_BUILD_RPMS_DIR}"/SRPMS
 
     # get list of packages and rebuild it one by one
-    SEARCH_DIR="${FULL_BUILD_RPMS_DIR}/SRPMS"
+    CH_DIR="${FULL_BUILD_RPMS_DIR}/SRPMS"
 
     echo "Search dir: ${SEARCH_DIR}"
     cd "${SEARCH_DIR}"
+
+    chmod -p "${GIGAOS_RESPIN_RESULT_DIR}"
 
     PACKAGE_COUNT=0
     for PACKAGE in "${SEARCH_DIR}"/*.rpm;
@@ -87,6 +90,9 @@ if [ ${NEED_RESPIN_RPMS} = true ]; then
         #yum install -y $(rpmbuild --sign --rebuild ${PACKAGE_FILE} | fgrep 'is needed by' | awk '{print $1}')
         yum-builddep -y -v ${PACKAGE_FILE}
         rpmbuild --rebuild ${PACKAGE_FILE}
+
+        rsync -avP ${FULL_BUILD_RPMS_DIR}/RPMS/${GIGAOS_BUILD_ISO_DIST_MACHINE}/* ${GIGAOS_RESPIN_RESULT_DIR}/
+        rsync -avP ${FULL_BUILD_RPMS_DIR}/RPMS/noarch/* ${GIGAOS_RESPIN_RESULT_DIR}/
 
         rm -f ${PACKAGE_FILE}
         rm -rf ${FULL_BUILD_RPMS_DIR}/BUILD/*
@@ -130,7 +136,7 @@ if [ ${NEED_BUILD_OS} = true ]; then
     # remove old data
     rm -rf ${GIGAOS_BUILD_ISO_BUILD_DIR}
 
-    #create build dir
+    # create build dir
     mkdir -p ${GIGAOS_BUILD_ISO_BUILD_DIR}
 
     # create folders for iso file
@@ -319,9 +325,65 @@ EOT
     echo '' >> ${GIGAOS_BUILD_ISO_ROOT_ISOLINUX_CFG}
     echo 'menu end' >> ${GIGAOS_BUILD_ISO_ROOT_ISOLINUX_CFG}
 
-
     # copy rpms
     rsync -avP ${GIGAOS_BUILD_ISO_MOUNT_POINT}/Packages/ ${GIGAOS_BUILD_ISO_ROOT_ISO}/Packages/
+
+    if [ NEED_TO_USE_RESPIN_RPMS = true ]; then
+        echo "Need to use respin rpms"
+
+        mkdir -p ${GIGAOS_BUILD_ISO_BUILD_RESPIN_DIR}
+
+        # NEED TO CHECK IF EXISTS
+        rsync -avP ${GIGAOS_RESPIN_RESULT_DIR}/ ${GIGAOS_BUILD_ISO_BUILD_RESPIN_DIR}/
+
+        # GigaOS will need to have own versuin of thes pacakges
+        declare -a package_array=("centos-release"
+                                "centos-release-notes"
+                                "redhat-artwork"
+                                "redhat-logos"
+                                "specspo"
+        )
+
+        # remove dublicates in CentOS repo
+        for filepath in ${GIGAOS_BUILD_ISO_BUILD_RESPIN_DIR}/*
+        do
+            filename=${filepath##*/}
+            packagename=${filename%%.*}
+            echo ${filename}
+
+            need_to_be_deleted=true
+            for i in "${package_array[@]}"
+            do
+                if [[ ${filename} = *$i* ]]; then
+                    need_to_be_deleted=false
+                    break
+                fi
+            done
+
+            if [[ "${need_to_be_deleted}" = false ]]; then
+                echo "Skip package ${filename}"
+                continue
+            fi
+
+            # find in repo
+            for entry in ${GIGAOS_BUILD_ISO_ROOT_ISO}/Packages/*
+            do
+                cur_filename=${entry##*/}
+                cur_packagename=${cur_filename%%.*}
+
+                if [[ ${packagename} == ${cur_packagename} ]]; then
+                    rm -f ${entry}
+                    echo "Remove package ${cur_filename} from CentOS repo"
+                fi
+            done
+
+        done
+
+        # copy respin rpms to iso-disk packages
+        rsync -avP ${GIGAOS_BUILD_ISO_BUILD_RESPIN_DIR} ${GIGAOS_BUILD_ISO_ROOT_ISO}/Packages/
+
+    fi
+
 
     # create repodata
     cd ${GIGAOS_BUILD_ISO_ROOT_ISO}/
@@ -336,6 +398,9 @@ EOT
     echo "Rebrending ${GIGAOS_BUILD_ISO_ROOT_ISOLINUX_CFG} file"
     sed -i "s/CentOS/${GIGAOS_BUILD_ISO_DIST_NAME}/g" ${GIGAOS_BUILD_ISO_ROOT_ISOLINUX_CFG}
 
+
+    # remove old TRANS.TBL files
+    find ${GIGAOS_BUILD_ISO_ROOT_ISO}/ -type f -name 'TRANS.TBL' -delete
 
 
     # make ISO - file
