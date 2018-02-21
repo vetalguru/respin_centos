@@ -15,18 +15,22 @@
 #set -e
 
 source ./config.cfg
-source ./scripts/common.sh
 
-export GIGAOS_CONFIG_FILE=${GIGAOS_ROOT_DIR}/config.cfg
 
+# NEED PROCESS COMMAND LINE PARAMETERS
+# COMMAND LINE PARAMETERS
 NEED_RESPIN_RPMS=false
 NEED_REPACK_STAGE=false
 NEED_BUILD_OS=true
-NEED_TO_USE_RESPIN_RPMS=true
-NEED_CREATE_OVF=false
+NEED_TO_USE_RESPIN_RPMS=false
+NEED_CREATE_OVF=true
+
 
 # check if user is root
-checkIfUserIsRoot || (echo "Please run as root"; exit 1)
+if [ "$EUID" -ne 0 ]; then
+    echo "Rlease run as root"
+    exit 1
+fi
 
 
 if [ ${NEED_RESPIN_RPMS} = true ]; then
@@ -306,8 +310,8 @@ rm -rf ${VMWARE_ROOT_DIR}/${VMWARE_MOUNT_POINT}
 
 %end
 
-# Reboot after install
-reboot --eject
+# Poweroff after install
+shutdown
 
 EOT
 
@@ -441,8 +445,16 @@ if [ ${NEED_CREATE_OVF} = true ]; then
     # create build dir
     mkdir -p ${GIGAOS_BUILD_OVF_BUILD_DIR}
 
+    # copy iso-file
+    if [ ! -f "$GIGAOS_BUILD_ISO_RESULT_ISO_FILE" ]; then
+        echo "Unable to find ISO-file ${GIGAOS_BUILD_ISO_RESULT_ISO_FILE}"
+        exit 1
+    fi
+
+    rsync -avP "${GIGAOS_BUILD_ISO_RESULT_ISO_FILE}" "${GIGAOS_BUILD_OVF_ISO_FILE}"
+
     # create *.VMX file
-    /bin/cat <<EOM >${FULL_VHD_FILE_PATH}
+    /bin/cat <<EOM >${GIGAOS_BUILD_OVF_VMX_FILE}
 #!/usr/bin/vmware
 .encoding = "UTF-8"
 config.version = "8"
@@ -534,10 +546,59 @@ EOM
     # create disk for vm
     vmware-vdiskmanager -c -t 0 -s "${GIGAOS_BUILD_OVF_DISK_SIZE}" -a buslogic "${GIGAOS_BUILD_OVF_DISK_FILE_NAME}"
 
-    # NEED TO WAIT FOR OS INSTALLATION (vmrun)
-    # NEED TO DO POSTINSTALL STEPS
-    # NEED TO STOP VM
-    # NEED TO CONVERT VM to OVF
+    # start the vm
+    vmrun -T ws start "${GIGAOS_BUILD_OVF_VMX_FILE}" nogui
+
+    # check if started
+    vm_run=`vmrun list | grep ${GIGAOS_BUILD_OVF_VMX_FILE}`
+    if [[ -z $vm_run ]]; then
+        echo "Virtual machine ${GIGAOS_BUILD_OVF_VMX_FILE} was not started"
+        exit 1
+    fi
+
+    echo "Virtual machine ${GIGAOS_BUILD_OVF_VMX_FILE} was started"
+
+    # wait while virtual machine is installating
+    tmp_time=${GIGAOS_BUILD_OVF_MAX_TIMEOUT_TO_CHECK_INSTALLATION}
+    while true
+    do
+        vm_run=`vmrun list | grep ${GIGAOS_BUILD_OVF_VMX_FILE}`
+        if [[ -z $vm_run ]]; then
+            echo "Virtual machine ${GIGAOS_BUILD_OVF_VMX_FILE} was stopped"
+            break
+        fi
+
+        sleep ${GIGAOS_BUILD_OVF_TIMEOUT_TO_CHECK_INSTALLATION}
+
+        #((tmp_time--))
+        tmp_time=$((${tmp_time}-${GIGAOS_BUILD_OVF_TIMEOUT_TO_CHECK_INSTALLATION}))
+
+        if [[ ${tmp_time} -le 0 ]]; then    # <=
+            echo "Timeout error..."
+            # stop vm
+            vmrun -T ws stop "${GIGAOS_BUILD_OVF_VMX_FILE}" hard
+            echo "Virtual machine was stopped"
+            exit 1
+        fi
+
+        echo "Installation time left ${tmp_time} second(s)"
+
+    done
+
+    echo "Vitrual machine was installed"
+
+    # NEED TO PROCESS POSTINSTALL STEPS
+
+    # convert vm to ovf
+    echo "Create OVF file"
+    ovftool --acceptAllEulas  \
+            --compress=${GIGAOS_BUILD_OVF_COMPRESS_VALUE} \
+            ${GIGAOS_BUILD_OVF_VMX_FILE} \
+            ${GIGAOS_BUILD_OVF_OVF_FILE}
+
+
+    echo "SUCCESS!!!!"
+    echo "OVF-file was created"
 fi
 
 
