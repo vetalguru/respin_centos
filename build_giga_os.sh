@@ -23,15 +23,21 @@ NEED_RESPIN_RPMS=false
 NEED_REPACK_STAGE=false
 NEED_BUILD_OS=true
 NEED_TO_USE_RESPIN_RPMS=false
-NEED_CREATE_OVF=true
+NEED_TO_INSTALL_APPASSURE_AGENT=true
+NEED_CREATE_OVF=false
 
+CMD_LINE_TC_USER_NAME=""
+CMD_LINE_TC_USER_PASSWD=""
+
+# TeamCity auth data
+# To use default login and password you need set 
+# valiables
 
 # check if user is root
 if [ "$EUID" -ne 0 ]; then
     echo "Rlease run as root"
     exit 1
 fi
-
 
 if [ ${NEED_RESPIN_RPMS} = true ]; then
 
@@ -151,7 +157,79 @@ if [ ${NEED_BUILD_OS} = true ]; then
     mkdir -p ${GIGAOS_BUILD_ISO_ROOT_ISO}/LiveOS
     mkdir -p ${GIGAOS_BUILD_ISO_ROOT_ISO}/Packages
 
-    # mount generaal cd
+
+
+
+
+    # copy AppAssure packages if need
+    if [ ${NEED_TO_INSTALL_APPASSURE_AGENT} = true ]; then
+        echo "Need to install AppAssure Agent"
+
+        # check if login entered
+        if [ -z ${CMD_LINE_TC_USER_NAME} ]; then
+            echo "Login is empty. Using default login and passwd"
+            CMD_LINE_TC_USER_NAME="${APPASSURE_DEFAULT_TEAM_CITY_USER_NAME}"
+            CMD_LINE_TC_USER_PASSWD="${APPASSURE_DEFAULT_TEAM_CITY_USER_PASSWD}"
+        fi
+
+        wget --no-check-certificate \
+             --http-user="${CMD_LINE_TC_USER_NAME}" \
+             --http-passwd="${CMD_LINE_TC_USER_PASSWD}" \
+             "${APPASSURE_PACKAGES_HTTP_ADDR_BUILD_VERSION_PAGE}" \
+             --output-document="${APPASSURE_PACKAGES_HTTP_ADDR_BUILD_VERSION_FILE}"
+
+        # check if result file exists
+        if [ ! -f "${APPASSURE_PACKAGES_HTTP_ADDR_BUILD_VERSION_FILE}" ]; then
+            echo "Unable to get TeamCity build version for Agent packages"
+            exit 1
+        fi
+
+        # parce result file
+        FULL_TC_BUILD_NAME=`xmllint --xpath "string(//build/@number)" ${APPASSURE_PACKAGES_HTTP_ADDR_BUILD_VERSION_FILE}`
+        echo "${FULL_TC_BUILD_NAME}" > ${APPASSURE_PACKAGES_HTTP_ADDR_BUILD_VERSION_FILE}
+
+        # need to parse build version file
+        TC_BUILD_NAME=$(echo ${FULL_TC_BUILD_NAME} | grep -oE '[0-9].[0-9].[0-9].[0-9][0-9][0-9][0-9]')
+
+        echo "Build number: ${TC_BUILD_NAME}"
+
+        # need to pack Agent's rpms
+        mkdir -p ${APPASSURE_ISO_AGENT_DIR}
+
+        # download agent rpm
+        FULL_AGENT_RPM_NAME="${APPASSURE_RPMS_AGENT_PACKAGE_NAME}-${TC_BUILD_NAME}-${APPASSURE_RPMS_SUFFIX}"
+        FULL_PATH_TO_AGENT_RPM="${APPASSURE_RPMS_ARTIFACTS_DOWNLOAD_PATH}${FULL_AGENT_RPM_NAME}"
+
+        wget --no-check-certificate \
+            --http-user="${CMD_LINE_TC_USER_NAME}" \
+            --http-passwd="${CMD_LINE_TC_USER_PASSWD}" \
+            "${FULL_PATH_TO_AGENT_RPM}" \
+            --output-document="${APPASSURE_ISO_AGENT_DIR}/${FULL_AGENT_RPM_NAME}"
+
+
+        # download mono
+        FULL_MONO_RPM_NAME="${APPASSURE_RPMS_MONO_PACKAGE_NAME}-${TC_BUILD_NAME}-${APPASSURE_RPMS_SUFFIX}"
+        FULL_PATH_TO_MONO_RPM="${APPASSURE_RPMS_ARTIFACTS_DOWNLOAD_PATH}${FULL_MONO_RPM_NAME}"
+
+        echo "HERE > ${FULL_PATH_TO_MONO_RPM}"
+
+        wget --no-check-certificate \
+            --http-user="${CMD_LINE_TC_USER_NAME}" \
+            --http-passwd="${CMD_LINE_TC_USER_PASSWD}" \
+            "${FULL_PATH_TO_MONO_RPM}" \
+            --output-document="${APPASSURE_ISO_AGENT_DIR}/${FULL_MONO_RPM_NAME}"
+
+        # download repo
+        FULL_REPO_RPM_NAME="${APPASSURE_RPMS_REPO_PACKAGE_NAME}-${TC_BUILD_NAME}-${APPASSURE_RPMS_SUFFIX}"
+        FULL_PATH_TO_REPO_RPM="${APPASSURE_RPMS_ARTIFACTS_DOWNLOAD_PATH}${FULL_AGENT_RPM_NAME}"
+
+        wget --no-check-certificate \
+            --http-user="${CMD_LINE_TC_USER_NAME}" \
+            --http-passwd="${CMD_LINE_TC_USER_PASSWD}" \
+            "${FULL_PATH_TO_REPO_RPM}" \
+            --output-document="${APPASSURE_ISO_AGENT_DIR}/${FULL_REPO_RPM_NAME}"
+    fi
+
     echo "Mount original cd disk to ${GIGAOS_BUILD_ISO_MOUNT_POINT}"
     mkdir -p ${GIGAOS_BUILD_ISO_MOUNT_POINT}
     mount -t iso9660 -o loop,ro ${GIGAOS_BUILD_ISO_CDROM_DEVICE} ${GIGAOS_BUILD_ISO_MOUNT_POINT}/
@@ -186,7 +264,7 @@ if [ ${NEED_BUILD_OS} = true ]; then
         umount ${GIGAOS_BUILD_ISO_VMWARE_MOUNT_POINT}
         rm -rf ${GIGAOS_BUILD_ISO_VMWARE_MOUNT_POINT}
     else
-        echo "Unable to find VMWare tools ($GIGAOS_BUILD_ISO_VMWARE_TOOLS_ISO_FILE_PATH)"
+        echo "Unable to find VMWare tools ${GIGAOS_BUILD_ISO_VMWARE_TOOLS_ISO_FILE_PATH}"
         exit 1
     fi
 
@@ -581,7 +659,7 @@ EOM
             exit 1
         fi
 
-        echo "Installation time left ${tmp_time} second(s)"
+        echo "Installation time left ${tmp_time} seconds"
 
     done
 
@@ -597,10 +675,13 @@ EOM
             ${GIGAOS_BUILD_OVF_OVF_FILE}
 
 
-    echo "SUCCESS!!!!"
-    echo "OVF-file was created"
+    echo "SUCCESS"
 fi
 
 
 exit 0
+
+
+
+
 
