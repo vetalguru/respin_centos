@@ -129,7 +129,7 @@ if [ ${NEED_BUILD_OS} = true ]; then
     yum -y install anaconda anaconda-runtime createrepo mkisofs yum-utils rpm-build
 
     # umount distributive disk if it was mounted
-    if [ -f ${GIGAOS_BUILD_ISO_MOUNT_POINT} ]; then
+    if [ -f "${GIGAOS_BUILD_ISO_MOUNT_POINT}" ]; then
 
         if mount | grep -q "${GIGAOS_BUILD_ISO_MOUNT_POINT_NAME}"; then
             umount ${GIGAOS_BUILD_ISO_MOUNT_POINT}
@@ -157,11 +157,7 @@ if [ ${NEED_BUILD_OS} = true ]; then
     mkdir -p ${GIGAOS_BUILD_ISO_ROOT_ISO}/LiveOS
     mkdir -p ${GIGAOS_BUILD_ISO_ROOT_ISO}/Packages
 
-
-
-
-
-    # copy AppAssure packages if need
+    # copy AppAssure packages to iso-image if need
     if [ ${NEED_TO_INSTALL_APPASSURE_AGENT} = true ]; then
         echo "Need to install AppAssure Agent"
 
@@ -211,8 +207,6 @@ if [ ${NEED_BUILD_OS} = true ]; then
         FULL_MONO_RPM_NAME="${APPASSURE_RPMS_MONO_PACKAGE_NAME}-${TC_BUILD_NAME}-${APPASSURE_RPMS_SUFFIX}"
         FULL_PATH_TO_MONO_RPM="${APPASSURE_RPMS_ARTIFACTS_DOWNLOAD_PATH}${FULL_MONO_RPM_NAME}"
 
-        echo "HERE > ${FULL_PATH_TO_MONO_RPM}"
-
         wget --no-check-certificate \
             --http-user="${CMD_LINE_TC_USER_NAME}" \
             --http-passwd="${CMD_LINE_TC_USER_PASSWD}" \
@@ -221,13 +215,33 @@ if [ ${NEED_BUILD_OS} = true ]; then
 
         # download repo
         FULL_REPO_RPM_NAME="${APPASSURE_RPMS_REPO_PACKAGE_NAME}-${TC_BUILD_NAME}-${APPASSURE_RPMS_SUFFIX}"
-        FULL_PATH_TO_REPO_RPM="${APPASSURE_RPMS_ARTIFACTS_DOWNLOAD_PATH}${FULL_AGENT_RPM_NAME}"
+        FULL_PATH_TO_REPO_RPM="${APPASSURE_RPMS_ARTIFACTS_DOWNLOAD_PATH}${FULL_REPO_RPM_NAME}"
 
         wget --no-check-certificate \
             --http-user="${CMD_LINE_TC_USER_NAME}" \
             --http-passwd="${CMD_LINE_TC_USER_PASSWD}" \
             "${FULL_PATH_TO_REPO_RPM}" \
             --output-document="${APPASSURE_ISO_AGENT_DIR}/${FULL_REPO_RPM_NAME}"
+
+        # download nbd
+        FULL_NBD_RPM_NAME="${APPASSURE_RPMS_NBD_PACKAGE_NAME}-${TC_BUILD_NAME}-${APPASSURE_RPMS_SUFFIX}"
+        FULL_PATH_TO_NBD_RPM="${APPASSURE_RPMS_ARTIFACTS_DOWNLOAD_PATH}${FULL_NBD_RPM_NAME}"
+
+        wget --no-check-certificate \
+            --http-user="${CMD_LINE_TC_USER_NAME}" \
+            --http-passwd="${CMD_LINE_TC_USER_PASSWD}" \
+            "${FULL_PATH_TO_NBD_RPM}" \
+            --output-document="${APPASSURE_ISO_AGENT_DIR}/${FULL_NBD_RPM_NAME}"
+
+        # download dkms
+        FULL_DKMS_RPM_NAME="${APPASSURE_RPMS_DKMS_PACKAGE_NAME}"  # it has constant name
+        FULL_PATH_TO_DKMS_RPM="${APPASSURE_RPMS_ARTIFACTS_DOWNLOAD_PATH}${FULL_DKMS_RPM_NAME}"
+
+        wget --no-check-certificate \
+            --http-user="${CMD_LINE_TC_USER_NAME}" \
+            --http-passwd="${CMD_LINE_TC_USER_PASSWD}" \
+            "${FULL_PATH_TO_DKMS_RPM}" \
+            --output-document="${APPASSURE_ISO_AGENT_DIR}/${FULL_DKMS_RPM_NAME}"
     fi
 
     echo "Mount original cd disk to ${GIGAOS_BUILD_ISO_MOUNT_POINT}"
