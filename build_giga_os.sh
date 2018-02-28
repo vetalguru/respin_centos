@@ -252,7 +252,7 @@ if [ ${NEED_BUILD_OS} = true ]; then
     rsync -avP ${GIGAOS_BUILD_ISO_MOUNT_POINT}/isolinux/ ${GIGAOS_BUILD_ISO_ROOT_ISOLINUX}/
 
     # copy disk info
-    rsync -avP ${GIGAOS_BUILD_ISO_MOUNT_POINT}/.diskinfo ${GIGAOS_BUILD_ISO_ROOT_ISOLINUX}/
+    rsync -avP ${GIGAOS_BUILD_ISO_MOUNT_POINT}/.discinfo ${GIGAOS_BUILD_ISO_ROOT_ISOLINUX}/
 
     # copy images folder
     rsync -avP ${GIGAOS_BUILD_ISO_MOUNT_POINT}/images/ ${GIGAOS_BUILD_ISO_ROOT_ISO}/images/
@@ -341,7 +341,7 @@ eula --agreed
 
 selinux --disabled
 
-%packages
+%packages --excludedocs
 @^kde-desktop-environment
 @base
 @core
@@ -360,45 +360,95 @@ selinux --disabled
 @networkmanager-submodules
 @print-client
 @x11
+gcc
 kexec-tools
+-nbd
+-dkms
 %end
 
 # Config the kdump kernel crash dumping mechanism
 %addon com_redhat_kdump --enable --reserve-mb='auto'
 %end
 
+
 %post --log=/root/ks-post.log
+
+# mount ISO-disk
+mkdir -p "${GIGAOS_ISO_MOUNT_POINT}"
+mount /dev/cdrom "${GIGAOS_ISO_MOUNT_POINT}"
+
 
 #
 # install vmware tools     =============================
 #
 
 # copy vmware tools
-mkdir -p $VMWARE_ROOT_DIR/${VMWARE_INSTALL_DIR_NAME}
-mkdir -p ${VMWARE_ROOT_DIR}/${VMWARE_MOUNT_POINT}
-mount /dev/cdrom ${VMWARE_ROOT_DIR}/${VMWARE_MOUNT_POINT}/
-rsync -av ${VMWARE_ROOT_DIR}/${VMWARE_MOUNT_POINT}/${VMWARE_INSTALL_DIR_NAME}/${VMWARE_ARCH_NAME} \
-${VMWARE_ROOT_DIR}/${VMWARE_INSTALL_DIR_NAME}/${VMWARE_ARCH_NAME}
-umount ${VMWARE_ROOT_DIR}/${VMWARE_MOUNT_POINT}/
+mkdir -p "${VMWARE_INSTALL_DIR}"
 
-# unpack vmware tools
-tar -zxf ${VMWARE_ROOT_DIR}/${VMWARE_INSTALL_DIR_NAME}/${VMWARE_ARCH_NAME} \
--C ${VMWARE_ROOT_DIR}/${VMWARE_INSTALL_DIR_NAME}/
+if [ -f "${GIGAOS_ISO_MOUNT_POINT}/${VMWARE_INSTALL_DIR_NAME}/${VMWARE_ARCH_NAME}" ]; then
+    rsync -av "${GIGAOS_ISO_MOUNT_POINT}/${VMWARE_INSTALL_DIR_NAME}/${VMWARE_ARCH_NAME}" \
+        "${VMWARE_INSTALL_DIR}/${VMWARE_ARCH_NAME}"
 
-# install vmware tools
-yum -y install kernel-devel gcc dracut make perl fuse-libs
-chmod +x ${VMWARE_ROOT_DIR}/${VMWARE_INSTALL_DIR_NAME}/vmware-tools-distrib/vmware-install.pl
-# start script
-. ${VMWARE_ROOT_DIR}/${VMWARE_INSTALL_DIR_NAME}/vmware-tools-distrib/vmware-install.pl --default
+    # unpack vmware tools
+    if [ -f "${VMWARE_INSTALL_DIR}/${VMWARE_ARCH_NAME}" ]; then
+        tar -zxf "${VMWARE_INSTALL_DIR}/${VMWARE_ARCH_NAME}" \
+            -C "${VMWARE_INSTALL_DIR}/"
 
-# clear data after installation
-umount ${VMWARE_ROOT_DIR}/${VMWARE_MOUNT_POINT}/ || /bin/true
-rm -rf ${VMWARE_ROOT_DIR}/${VMWARE_INSTALL_DIR_NAME}
-rm -rf ${VMWARE_ROOT_DIR}/${VMWARE_MOUNT_POINT}
+        # install vmware tools
+        yum -y install kernel-devel gcc dracut make perl fuse-libs
+
+        if [ ! -f "${VMWARE_INSTALL_DIR}/vmware-tools-distrib/vmware-install.pl" ]; then
+            echo "Unable to find vmware-install.pl"
+        fi
+
+        # start script
+        chmod +x "${VMWARE_INSTALL_DIR}/vmware-tools-distrib/vmware-install.pl"
+        . "${VMWARE_INSTALL_DIR}/vmware-tools-distrib/vmware-install.pl" --default
+
+        # clear data after installation
+        #m -rf "${VMWARE_INSTALL_DIR}"
+    fi
+fi
+
+
 
 #
-# set autologin for user
+# Install AppAssure agent
 #
+
+if [ -d "${GIGAOS_ISO_MOUNT_POINT}/${APPASSURE_ISO_AGENT_DIR_NAME}" ]; then
+    #cp "${GIGAOS_ISO_MOUNT_POINT}/${APPASSURE_ISO_AGENT_DIR_NAME}/*" \
+    #    "${APPASSURE_GIGAOS_RPMS}/"
+
+    mkdir -p "${APPASSURE_GIGAOS_RPMS}"
+    rsync -av "${GIGAOS_ISO_MOUNT_POINT}/${APPASSURE_ISO_AGENT_DIR_NAME}/" "${APPASSURE_GIGAOS_RPMS}"
+
+    # install rpms
+
+    # install mono
+    rpm -e --nodeps "${APPASSURE_GIGAOS_RPMS}/${APPASSURE_RPMS_MONO_PACKAGE_NAME}*.rpm"
+    rpm -i --force "${APPASSURE_GIGAOS_RPMS}/${APPASSURE_RPMS_MONO_PACKAGE_NAME}*.rpm"
+
+    # install repo
+    rpm -e --nodeps "${APPASSURE_GIGAOS_RPMS}/${APPASSURE_RPMS_REPO_PACKAGE_NAME}*.rpm"
+    rpm -i --force "${APPASSURE_GIGAOS_RPMS}/${APPASSURE_RPMS_REPO_PACKAGE_NAME}*.rpm"
+
+    # install DKMS
+    rpm -e --nodeps "${APPASSURE_GIGAOS_RPMS}/dkms-*.rpm"
+    rpm -i --force "${APPASSURE_GIGAOS_RPMS}/${APPASSURE_RPMS_DKMS_PACKAGE_NAME}"
+
+    # install nbd
+    rpm -e --nodeps "${APPASSURE_GIGAOS_RPMS}/${APPASSURE_RPMS_NBD_PACKAGE_NAME}*.rpm"
+    rpm -i --force "${APPASSURE_GIGAOS_RPMS}/${APPASSURE_RPMS_NBD_PACKAGE_NAME}*.rpm"
+
+    # install agent
+    rpm -e --nodeps "${APPASSURE_GIGAOS_RPMS}/${APPASSURE_RPMS_AGENT_PACKAGE_NAME}*.rpm"
+    rpm -i --force "${APPASSURE_GIGAOS_RPMS}/${APPASSURE_RPMS_AGENT_PACKAGE_NAME}*.rpm"
+fi
+
+
+# umount ISO-disk
+umount "${GIGAOS_ISO_MOUNT_POINT}"
 
 %end
 
@@ -680,6 +730,9 @@ EOM
     echo "Vitrual machine was installed"
 
     # NEED TO PROCESS POSTINSTALL STEPS
+    # NEED TO CHECK IF VMWARE-TOOLS WAS INSTALLED (pgrep -l vmtoolsd)
+    # NEED TO CHECK IF RPMS WAS INSTALLED
+
 
     # convert vm to ovf
     echo "Create OVF file"
@@ -694,8 +747,4 @@ fi
 
 
 exit 0
-
-
-
-
 
