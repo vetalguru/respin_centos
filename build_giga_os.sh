@@ -433,6 +433,12 @@ fi
 # umount ISO-disk
 umount "${GIGAOS_ISO_MOUNT_POINT}"
 
+#
+# User autologin
+#
+
+sed -i 's/\<agetty\>/& --autologin ${ANACONDA_USER_NAME}/' /etc/systemd/system/getty.target.wants/getty\@tty1.service
+
 %end
 
 # Poweroff after install
