@@ -341,27 +341,10 @@ eula --agreed
 
 selinux --disabled
 
-%packages --excludedocs
-@^kde-desktop-environment
+%packages --ignoremissing --excludedocs
 @base
 @core
-@desktop-debugging
-@dial-up
-@directory-client
-@fonts
-@guest-agents
-@guest-desktop-agents
-@input-methods
-@internet-browser
-@java-platform
-@kde-desktop
-@multimedia
-@network-file-system-client
-@networkmanager-submodules
-@print-client
-@x11
 gcc
-kexec-tools
 -nbd
 -dkms
 %end
