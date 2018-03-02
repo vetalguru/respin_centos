@@ -20,7 +20,7 @@ source ./config.cfg
 # NEED PROCESS COMMAND LINE PARAMETERS
 # COMMAND LINE PARAMETERS
 NEED_RESPIN_RPMS=false
-NEED_REPACK_STAGE=false
+NEED_REPACK_STAGE=true
 NEED_BUILD_OS=true
 NEED_TO_USE_RESPIN_RPMS=false
 NEED_TO_INSTALL_APPASSURE_AGENT=true
@@ -30,7 +30,7 @@ CMD_LINE_TC_USER_NAME=""
 CMD_LINE_TC_USER_PASSWD=""
 
 # TeamCity auth data
-# To use default login and password you need set 
+# To use default login and password you need set
 # valiables
 
 # check if user is root
@@ -41,6 +41,7 @@ fi
 
 if [ ${NEED_RESPIN_RPMS} = true ]; then
 
+    # IT WILL BE OK TO DOWNLOAD PACKAGES FOR RESPIN
 
     if [ ! -f ${GIGAOS_RESPIN_SCRIPT} ]; then
         echo "Unable to find script ${GIGAOS_RESPIN_SCRIPT}"
@@ -117,11 +118,6 @@ if [ ${NEED_RESPIN_RPMS} = true ]; then
 
     cd ${GIGAOS_ROOT_DIR}
 fi
-
-
-#if [ ${NEED_REPACK_STAGE} = true ]; then
-    # NEED_TO_PROCESS
-#fi
 
 
 if [ ${NEED_BUILD_OS} = true ]; then
@@ -264,6 +260,92 @@ if [ ${NEED_BUILD_OS} = true ]; then
     find ${GIGAOS_BUILD_ISO_MOUNT_POINT}/repodata -name '*comps.xml.gz' -exec cp {} ${GIGAOS_BUILD_ISO_ROOT_ISO}/comps.xml.gz \;
     gunzip ${GIGAOS_BUILD_ISO_ROOT_ISO}/comps.xml.gz
 
+
+    # repack stage
+    if [ ${NEED_REPACK_STAGE} = true ]; then
+        # Anaconda customization guide
+
+        # remove old data
+        rm -rf ${STAGE_BUILD_DIR}
+
+        # create root working dir
+        mkdir -p ${STAGE_BUILD_DIR}
+
+        # create product dir
+        mkdir -p ${STAGE_BUILD_PRODUCT_DIR}
+
+        # copy pixmaps (logo, side bar, top bar, etc.)
+        mkdir -p ${STAGE_BUILD_ANACONDA_PIXMAPS_PATH}
+        rsync -av ${STAGE_BUILD_ORIGIN_ANACONDA_PIXMAPS_PATH}/ ${STAGE_BUILD_ANACONDA_PIXMAPS_PATH}
+
+        # copy banners for the instalaltion progress screen
+        mkdir -p ${STAGE_BUILD_ANACONDA_BANNERS_PATH}
+        rsync -av ${STAGE_BUILD_ORIGIN_ANACONDA_INSTALL_BANNERS_PATH}/ ${STAGE_BUILD_ANACONDA_BANNERS_PATH}
+
+        # copy GUI stylesheet
+        cp ${STAGE_BUILD_ORIGIN_ANACONDA_STYLE_PATH} ${STAGE_BUILD_ANACONDA_STYLE_PATH}/
+
+        # create producxt class
+        mkdir -p ${STAGE_BUILD_ANACONDA_INST_CLASS_PATH}
+        echo "#  ${GIGAOS_BUILD_ISO_ISODATE}" > "${STAGE_BUILD_ANACONDA_INST_CLASS_PATH}/custom.py"
+        cat <<EOT >> "${STAGE_BUILD_ANACONDA_INST_CLASS_PATH}/custom.py"
+from pyanaconda.installclass import BaseInstallClass
+from pyanaconda.product import productName
+from pyanaconda import network
+from pyanaconda import nm
+
+class CustomBaseInstallClass(BaseInstallClass):
+    name = "${GIGAOS_BUILD_ISO_DIST_NAME}"
+    sortPriority = 30000
+    if not productName.startswith("${GIGAOS_BUILD_ISO_DIST_NAME}"):
+        hidden = True
+    defaultFS = "xfs"
+    bootloaderTimeoutDefault = 5
+    bootloaderExtraArgs = []
+
+    ignoredPackages = ["ntfsprogs"]
+
+    installUpdates - False
+
+    _l10n_domain = "comps"
+
+    efi_dir = "redhat"
+
+    help_placeholder = "RHEL7Placeholder.html"
+    help_placeholder_with_links = "RHEL7PlaceholderWithLinks.html"
+
+    def configure(self, anaconda):
+        BaseInstallClass.configure(self, anaconda)
+        BaseInstallClass.setDefaultPartitioning(self, anaconda.storage)
+
+    def setNetworkOnbootDefault(self, ksdata):
+        if ksdata.method.method not in ("url", "nfs"):
+            return
+        if network.has_some_wired_autoconnect_device():
+            return
+        dev = network.default_route_device()
+        if not dev:
+            return
+        if nm.nm_device_type_is_wifi(dev):
+            return
+        network.update_onboot_value(dev, "yes", ksdata)
+
+    def __init__(self):
+        BaseInstallClass.__init__(self)
+EOT
+
+        # NEED TO CREATE FILES
+
+        # create img file
+        find ${STAGE_BUILD_PRODUCT_DIR} | cpio -c -o | gzip -9cv > "${STAGE_BUILD_DIR}/${STAGE_BUILD_PRODUCT_NAME}.img"
+
+        # move product img to iso images/
+        echo "${STAGE_BUILD_DIR}/${STAGE_BUILD_PRODUCT_NAME}.img"
+        echo "${GIGAOS_BUILD_ISO_ROOT_ISO}/images/${STAGE_BUILD_PRODUCT_NAME}.img"
+        cp "${STAGE_BUILD_DIR}/${STAGE_BUILD_PRODUCT_NAME}.img" "${GIGAOS_BUILD_ISO_ROOT_ISO}/images/${STAGE_BUILD_PRODUCT_NAME}.img"
+
+    fi
+
     # copy vmware tools
     if [ -f ${GIGAOS_BUILD_ISO_VMWARE_TOOLS_ISO_FILE_PATH} ]; then
         echo "Copy vmware tools to iso dir"
@@ -294,7 +376,8 @@ cdrom
 
 # Use grafical install
 #graphical
-cmdline
+#cmdline
+text
 
 # Run the Setup Agent on first boot
 firstboot --disabled
@@ -446,19 +529,29 @@ shutdown
 
 EOT
 
-
     # remove unused menu items
     chmod +w ${GIGAOS_BUILD_ISO_ROOT_ISOLINUX_CFG}
     sed -i '/label/,$d' ${GIGAOS_BUILD_ISO_ROOT_ISOLINUX_CFG}
 
+
     # add ks-file to default item in installer menu
-    echo 'label check_' >> ${GIGAOS_BUILD_ISO_ROOT_ISOLINUX_CFG}
-    echo '    menu label Test this ^media & install CentOS 7' >> ${GIGAOS_BUILD_ISO_ROOT_ISOLINUX_CFG}
-    echo '    menu default' >> ${GIGAOS_BUILD_ISO_ROOT_ISOLINUX_CFG}
-    echo '    kernel vmlinuz' >> ${GIGAOS_BUILD_ISO_ROOT_ISOLINUX_CFG}
-    echo '    append initrd=initrd.img inst.stage2=hd:LABEL=CentOS\x207\x20x86_64 rd.live.check inst.ks=cdrom:/dev/cdrom:/ks/ks.cfg' >> ${GIGAOS_BUILD_ISO_ROOT_ISOLINUX_CFG}
-    echo '' >> ${GIGAOS_BUILD_ISO_ROOT_ISOLINUX_CFG}
-    echo 'menu end' >> ${GIGAOS_BUILD_ISO_ROOT_ISOLINUX_CFG}
+    if [ ${NEED_REPACK_STAGE} = true ]; then
+        echo 'label check_' >> ${GIGAOS_BUILD_ISO_ROOT_ISOLINUX_CFG}
+        echo '    menu label Test this ^media & install CentOS 7' >> ${GIGAOS_BUILD_ISO_ROOT_ISOLINUX_CFG}
+        echo '    menu default' >> ${GIGAOS_BUILD_ISO_ROOT_ISOLINUX_CFG}
+        echo '    kernel vmlinuz' >> ${GIGAOS_BUILD_ISO_ROOT_ISOLINUX_CFG}
+        echo '    append initrd=initrd.img inst.stage2=hd:LABEL=CentOS\x207\x20x86_64 rd.live.check inst.ks=cdrom:/dev/cdrom:/ks/ks.cfg inst.updates=cdrom:/dev/cdrom:/images/product.img' >> ${GIGAOS_BUILD_ISO_ROOT_ISOLINUX_CFG}
+        echo '' >> ${GIGAOS_BUILD_ISO_ROOT_ISOLINUX_CFG}
+        echo 'menu end' >> ${GIGAOS_BUILD_ISO_ROOT_ISOLINUX_CFG}
+    else
+        echo 'label check_' >> ${GIGAOS_BUILD_ISO_ROOT_ISOLINUX_CFG}
+        echo '    menu label Test this ^media & install CentOS 7' >> ${GIGAOS_BUILD_ISO_ROOT_ISOLINUX_CFG}
+        echo '    menu default' >> ${GIGAOS_BUILD_ISO_ROOT_ISOLINUX_CFG}
+        echo '    kernel vmlinuz' >> ${GIGAOS_BUILD_ISO_ROOT_ISOLINUX_CFG}
+        echo '    append initrd=initrd.img inst.stage2=hd:LABEL=CentOS\x207\x20x86_64 rd.live.check inst.ks=cdrom:/dev/cdrom:/ks/ks.cfg' >> ${GIGAOS_BUILD_ISO_ROOT_ISOLINUX_CFG}
+        echo '' >> ${GIGAOS_BUILD_ISO_ROOT_ISOLINUX_CFG}
+        echo 'menu end' >> ${GIGAOS_BUILD_ISO_ROOT_ISOLINUX_CFG}
+    fi
 
     # copy rpms
     rsync -avP ${GIGAOS_BUILD_ISO_MOUNT_POINT}/Packages/ ${GIGAOS_BUILD_ISO_ROOT_ISO}/Packages/
@@ -583,6 +676,10 @@ if [ ${NEED_CREATE_OVF} = true ]; then
     fi
 
     rsync -avP "${GIGAOS_BUILD_ISO_RESULT_ISO_FILE}" "${GIGAOS_BUILD_OVF_ISO_FILE}"
+
+    # NEED TO CHECK IF VMWARE_WORKSTATION WAS INSTALLED
+    # IF NOT -> INSTALL IT
+
 
     # create *.VMX file
     /bin/cat <<EOM >${GIGAOS_BUILD_OVF_VMX_FILE}
@@ -733,7 +830,6 @@ EOM
 
     echo "SUCCESS"
 fi
-
 
 exit 0
 
