@@ -24,7 +24,7 @@ NEED_REPACK_STAGE=true
 NEED_BUILD_OS=true
 NEED_TO_USE_RESPIN_RPMS=false
 NEED_TO_INSTALL_APPASSURE_AGENT=true
-NEED_CREATE_OVF=false
+NEED_CREATE_OVF=true
 
 CMD_LINE_TC_USER_NAME=""
 CMD_LINE_TC_USER_PASSWD=""
@@ -243,6 +243,14 @@ if [ ${NEED_BUILD_OS} = true ]; then
     echo "Mount original cd disk to ${GIGAOS_BUILD_ISO_MOUNT_POINT}"
     mkdir -p ${GIGAOS_BUILD_ISO_MOUNT_POINT}
     mount -t iso9660 -o loop,ro ${GIGAOS_BUILD_ISO_CDROM_DEVICE} ${GIGAOS_BUILD_ISO_MOUNT_POINT}/
+
+
+    if ! grep "${GIGAOS_BUILD_ISO_MOUNT_POINT}" /proc/mounts; then
+        echo "ERROR!!!!!!"
+        echo "Original disk NOT mounted!!!"
+        echo "Mount original disk and run this script again!"
+        exit 1
+    fi
 
     # copy isolinux
     rsync -avP ${GIGAOS_BUILD_ISO_MOUNT_POINT}/isolinux/ ${GIGAOS_BUILD_ISO_ROOT_ISOLINUX}/
