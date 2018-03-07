@@ -510,6 +510,11 @@ if [ -d "${GIGAOS_ISO_MOUNT_POINT}/${APPASSURE_ISO_AGENT_DIR_NAME}" ]; then
     # install agent
     rpm -e --nodeps "${APPASSURE_GIGAOS_RPMS}/${APPASSURE_RPMS_AGENT_PACKAGE_NAME}*.rpm"
     rpm -i --force "${APPASSURE_GIGAOS_RPMS}/${APPASSURE_RPMS_AGENT_PACKAGE_NAME}*.rpm"
+
+    # config agent
+    /usr/bin/rapidrecovery-config -p ${RAPIDRECOVERY_PORT} \
+-u ${ANACONDA_USER_NAME} -f firewalld -m all -v off -s
+
 fi
 
 
