@@ -24,7 +24,7 @@ NEED_REPACK_STAGE=true
 NEED_BUILD_OS=true
 NEED_TO_USE_RESPIN_RPMS=false
 NEED_TO_INSTALL_APPASSURE_AGENT=true
-NEED_CREATE_OVF=true
+NEED_CREATE_OVF=false
 
 CMD_LINE_TC_USER_NAME=""
 CMD_LINE_TC_USER_PASSWD=""
@@ -546,6 +546,12 @@ sed -i 's/CentOS/${GIGAOS_BUILD_ISO_DIST_NAME}/g' /etc/os-release
 #
 sed -i 's/CentOS/${GIGAOS_BUILD_ISO_DIST_NAME}/g' /etc/centos-release
 
+#
+# update grub menu
+#
+echo "Changing grub menu..."
+/usr/sbin/grub2-mkconfig -o /boot/grub2/grub.cfg
+
 %end
 
 # Poweroff after install
@@ -872,9 +878,9 @@ EOF
     # convert vm to ovf
     echo "Create OVF file"
     ovftool --acceptAllEulas  \
-            --compress=${GIGAOS_BUILD_OVF_COMPRESS_VALUE} \
-            ${GIGAOS_BUILD_OVF_VMX_FILE} \
-            ${GIGAOS_BUILD_OVF_OVF_FILE}
+--compress=${GIGAOS_BUILD_OVF_COMPRESS_VALUE} \
+${GIGAOS_BUILD_OVF_VMX_FILE} \
+${GIGAOS_BUILD_OVF_OVF_FILE}
 
 
     echo "SUCCESS"
