@@ -367,7 +367,7 @@ EOT
     # create  KS-file
     mkdir -p ${GIGAOS_BUILD_ISO_ROOT_KS}
     echo "#  ${GIGAOS_BUILD_ISO_ISODATE}" >  ${GIGAOS_BUILD_ISO_ROOT_KS_CFG}
-    cat <<EOT >> ${GIGAOS_BUILD_ISO_ROOT_KS_CFG}
+    cat << EOF > ${GIGAOS_BUILD_ISO_ROOT_KS_CFG}
 # System authorization information
 auth --enableshadow -passalgo=sha512
 
@@ -453,23 +453,25 @@ mkdir -p "${VMWARE_INSTALL_DIR}"
 
 if [ -f "${GIGAOS_ISO_MOUNT_POINT}/${VMWARE_INSTALL_DIR_NAME}/${VMWARE_ARCH_NAME}" ]; then
     rsync -av "${GIGAOS_ISO_MOUNT_POINT}/${VMWARE_INSTALL_DIR_NAME}/${VMWARE_ARCH_NAME}" \
-        "${VMWARE_INSTALL_DIR}/${VMWARE_ARCH_NAME}"
+"${VMWARE_INSTALL_DIR}/${VMWARE_ARCH_NAME}"
 
     # unpack vmware tools
     if [ -f "${VMWARE_INSTALL_DIR}/${VMWARE_ARCH_NAME}" ]; then
         tar -zxf "${VMWARE_INSTALL_DIR}/${VMWARE_ARCH_NAME}" \
-            -C "${VMWARE_INSTALL_DIR}/"
+-C "${VMWARE_INSTALL_DIR}/"
 
         # install vmware tools
         yum -y install kernel-devel gcc dracut make perl fuse-libs
 
-        if [ ! -f "${VMWARE_INSTALL_DIR}/vmware-tools-distrib/vmware-install.pl" ]; then
-            echo "Unable to find vmware-install.pl"
-        fi
+        yum -y install open-vm-tools
 
-        # start script
-        chmod +x "${VMWARE_INSTALL_DIR}/vmware-tools-distrib/vmware-install.pl"
-        . "${VMWARE_INSTALL_DIR}/vmware-tools-distrib/vmware-install.pl" --default
+        #if [ ! -f "${VMWARE_INSTALL_DIR}/vmware-tools-distrib/vmware-install.pl" ]; then
+        #    echo "Unable to find vmware-install.pl"
+        #fi
+
+        ## start script
+        #chmod +x "${VMWARE_INSTALL_DIR}/vmware-tools-distrib/vmware-install.pl"
+        #. "${VMWARE_INSTALL_DIR}/vmware-tools-distrib/vmware-install.pl" --default
 
         # clear data after installation
         #m -rf "${VMWARE_INSTALL_DIR}"
@@ -483,8 +485,6 @@ fi
 #
 
 if [ -d "${GIGAOS_ISO_MOUNT_POINT}/${APPASSURE_ISO_AGENT_DIR_NAME}" ]; then
-    #cp "${GIGAOS_ISO_MOUNT_POINT}/${APPASSURE_ISO_AGENT_DIR_NAME}/*" \
-    #    "${APPASSURE_GIGAOS_RPMS}/"
 
     mkdir -p "${APPASSURE_GIGAOS_RPMS}"
     rsync -av "${GIGAOS_ISO_MOUNT_POINT}/${APPASSURE_ISO_AGENT_DIR_NAME}/" "${APPASSURE_GIGAOS_RPMS}"
@@ -522,12 +522,23 @@ umount "${GIGAOS_ISO_MOUNT_POINT}"
 
 sed -i 's/\<agetty\>/& --autologin ${ANACONDA_USER_NAME}/' /etc/systemd/system/getty.target.wants/getty\@tty1.service
 
+
+#
+# Change os-release file
+#
+sed -i 's/CentOS/${GIGAOS_BUILD_ISO_DIST_NAME}/g' /etc/os-release
+
+#
+# Change centos-release file
+#
+sed -i 's/CentOS/${GIGAOS_BUILD_ISO_DIST_NAME}/g' /etc/centos-release
+
 %end
 
 # Poweroff after install
 shutdown
 
-EOT
+EOF
 
     # remove unused menu items
     chmod +w ${GIGAOS_BUILD_ISO_ROOT_ISOLINUX_CFG}
