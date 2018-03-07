@@ -836,8 +836,6 @@ EOF
     # start the vm
     vmrun -T ws start "${GIGAOS_BUILD_OVF_VMX_FILE}" nogui
 
-    # NEED TO PROCESS POSTINSTALL STEPS
-
     # check VWware tools
     VMWARE_TOOLS_PS_RESULT=$(vmrun -T ws -gu root -gp ${ANACONDA_ROOT_PASS} listProcessesInGuest "${GIGAOS_BUILD_OVF_VMX_FILE}" | grep vmtoolsd)
     if [[ -z "${VMWARE_TOOLS_PS_RESULT}" ]]; then
@@ -848,7 +846,15 @@ EOF
         echo "    ${VMWARE_TOOLS_PS_RESULT}"
     fi
 
-    # NEED TO CHECK IF RPMS WAS INSTALLED
+    # check agent service
+    AGENT_SERVICE_PS_RESULT=$(vmrun -T ws -gu root -gp ${ANACONDA_ROOT_PASS} listProcessesInGuest "${GIGAOS_BUILD_OVF_VMX_FILE}" | grep mono)
+    if [[ -z "${AGENT_SERVICE_PS_RESULT}" ]]; then
+        echo "ERROR!!!!"
+        echo "Agent process not found in guest OS"
+    else
+        echo "Agent service process:"
+        echo "    ${AGENT_SERVICE_PS_RESULT}"
+    fi
 
     # turn off the vm
     vmrun -T ws stop "${GIGAOS_BUILD_OVF_VMX_FILE}" soft
