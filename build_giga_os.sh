@@ -698,7 +698,7 @@ if [ ${NEED_CREATE_OVF} = true ]; then
 
 
     # create *.VMX file
-    /bin/cat <<EOM >${GIGAOS_BUILD_OVF_VMX_FILE}
+    /bin/cat << EOF >${GIGAOS_BUILD_OVF_VMX_FILE}
 #!/usr/bin/vmware
 .encoding = "UTF-8"
 config.version = "8"
@@ -785,7 +785,7 @@ usb:0.present = "TRUE"
 usb:0.deviceType = "hid"
 usb:0.port = "0"
 usb:0.parent = "-1"
-EOM
+EOF
 
     # create disk for vm
     vmware-vdiskmanager -c -t 0 -s "${GIGAOS_BUILD_OVF_DISK_SIZE}" -a buslogic "${GIGAOS_BUILD_OVF_DISK_FILE_NAME}"
@@ -829,12 +829,31 @@ EOM
 
     done
 
-    echo "Vitrual machine was installed"
+    echo "Vitrual machine was stopped"
+
+    echo "Starting virtula machine for postinstall settings and checks"
+
+    # start the vm
+    vmrun -T ws start "${GIGAOS_BUILD_OVF_VMX_FILE}" nogui
 
     # NEED TO PROCESS POSTINSTALL STEPS
-    # NEED TO CHECK IF VMWARE-TOOLS WAS INSTALLED (pgrep -l vmtoolsd)
+
+    # check VWware tools
+    VMWARE_TOOLS_PS_RESULT=$(vmrun -T ws -gu root -gp ${ANACONDA_ROOT_PASS} listProcessesInGuest "${GIGAOS_BUILD_OVF_VMX_FILE}" | grep vmtoolsd)
+    if [[ -z "${VMWARE_TOOLS_PS_RESULT}" ]]; then
+        echo "ERROR!!!!"
+        echo "VMware tools process not found in guest OS"
+    else
+        echo "VMware tools process:"
+        echo "    ${VMWARE_TOOLS_PS_RESULT}"
+    fi
+
     # NEED TO CHECK IF RPMS WAS INSTALLED
 
+    # turn off the vm
+    vmrun -T ws stop "${GIGAOS_BUILD_OVF_VMX_FILE}" soft
+
+    echo "Vitrual machine was stopped"
 
     # convert vm to ovf
     echo "Create OVF file"
