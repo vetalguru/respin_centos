@@ -122,7 +122,7 @@ fi
 
 if [ ${NEED_BUILD_OS} = true ]; then
     # install dependencies
-    yum -y install anaconda anaconda-runtime createrepo mkisofs yum-utils rpm-build
+    yum -y install anaconda anaconda-runtime createrepo mkisofs yum-utils rpm-build pykickstart
 
     # umount distributive disk if it was mounted
     if [ -f "${GIGAOS_BUILD_ISO_MOUNT_POINT}" ]; then
@@ -549,8 +549,7 @@ sed -i 's/CentOS/${GIGAOS_BUILD_ISO_DIST_NAME}/g' /etc/centos-release
 #
 # update grub menu
 #
-echo "Changing grub menu..."
-/usr/sbin/grub2-mkconfig -o /boot/grub2/grub.cfg
+grub2-mkconfig -o /boot/grub2/grub.cfg
 
 %end
 
@@ -558,6 +557,16 @@ echo "Changing grub menu..."
 shutdown
 
 EOF
+
+    # check kickstart file
+    KS_CHECK_RESULT=$(ksvalidator ${GIGAOS_BUILD_ISO_ROOT_KS_CFG})
+    if [[ ! -z "${KS_CHECK_RESULT}" ]]; then
+        echo "ERROR!!!!"
+        echo "Kickstart file errors: ${KS_CHECK_RESULT}"
+        exit 1
+    else
+        echo "KS-file OK"
+    fi
 
     # remove unused menu items
     chmod +w ${GIGAOS_BUILD_ISO_ROOT_ISOLINUX_CFG}
