@@ -424,8 +424,8 @@ autopart --type=lvm
 #clearpart --none --initlabel
 clearpart --all
 
-# Reboot after install
-#reboot --eject
+# Power off after install
+shutdown
 
 # Accept license
 eula --agreed
@@ -551,10 +551,21 @@ sed -i 's/CentOS/${GIGAOS_BUILD_ISO_DIST_NAME}/g' /etc/centos-release
 #
 grub2-mkconfig -o /boot/grub2/grub.cfg
 
-%end
+#
+# update motd file
+#
+echo "                                                          " > /etc/motd
+echo "      ___                ___                              " >> /etc/motd
+echo "     /   |  ____  ____  /   |  ____________  __________   " >> /etc/motd
+echo "    / /| | / __ \/ __ \/ /| | / ___/ ___/ / / / ___/ _ \  " >> /etc/motd
+echo "   / ___ |/ /_/ / /_/ / ___ |(__  |__  ) /_/ / /  /  __/  " >> /etc/motd
+echo "  /_/  |_/ .___/ .___/_/  |_/____/____/\__,_/_/   \___/   " >> /etc/motd
+echo "        /_/   /_/                                         " >> /etc/motd
+echo "                                                          " >> /etc/motd
+echo "                                                          " >> /etc/motd
 
-# Poweroff after install
-shutdown
+
+%end
 
 EOF
 
