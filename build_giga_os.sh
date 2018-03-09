@@ -24,7 +24,7 @@ NEED_REPACK_STAGE=true
 NEED_BUILD_OS=true
 NEED_TO_USE_RESPIN_RPMS=false
 NEED_TO_INSTALL_APPASSURE_AGENT=true
-NEED_CREATE_OVF=false
+NEED_CREATE_OVF=true
 
 CMD_LINE_TC_USER_NAME=""
 CMD_LINE_TC_USER_PASSWD=""
@@ -870,6 +870,9 @@ EOF
     # start the vm
     vmrun -T ws start "${GIGAOS_BUILD_OVF_VMX_FILE}" nogui
 
+    # need to wait when guest OS started
+    sleep 2m
+
     # check VWware tools
     VMWARE_TOOLS_PS_RESULT=$(vmrun -T ws -gu root -gp ${ANACONDA_ROOT_PASS} listProcessesInGuest "${GIGAOS_BUILD_OVF_VMX_FILE}" | grep vmtoolsd)
     if [[ -z "${VMWARE_TOOLS_PS_RESULT}" ]]; then
@@ -881,7 +884,7 @@ EOF
     fi
 
     # check agent service
-    AGENT_SERVICE_PS_RESULT=$(vmrun -T ws -gu root -gp ${ANACONDA_ROOT_PASS} listProcessesInGuest "${GIGAOS_BUILD_OVF_VMX_FILE}" | grep mono)
+    AGENT_SERVICE_PS_RESULT=$(vmrun -T ws -gu root -gp ${ANACONDA_ROOT_PASS} listProcessesInGuest "${GIGAOS_BUILD_OVF_VMX_FILE}" | grep Agent.Service)
     if [[ -z "${AGENT_SERVICE_PS_RESULT}" ]]; then
         echo "ERROR!!!!"
         echo "Agent process not found in guest OS"
