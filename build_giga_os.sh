@@ -19,12 +19,12 @@ source ./config.cfg
 
 # NEED PROCESS COMMAND LINE PARAMETERS
 # COMMAND LINE PARAMETERS
-NEED_RESPIN_RPMS=false
-NEED_REPACK_STAGE=true
-NEED_BUILD_OS=true
+NEED_RESPIN_RPMS=true
+NEED_REPACK_STAGE=false
+NEED_BUILD_OS=false
 NEED_TO_USE_RESPIN_RPMS=false
-NEED_TO_INSTALL_APPASSURE_AGENT=true
-NEED_CREATE_OVF=true
+NEED_TO_INSTALL_APPASSURE_AGENT=false
+NEED_CREATE_OVF=false
 
 CMD_LINE_TC_USER_NAME=""
 CMD_LINE_TC_USER_PASSWD=""
@@ -35,18 +35,13 @@ CMD_LINE_TC_USER_PASSWD=""
 
 # check if user is root
 if [ "$EUID" -ne 0 ]; then
-    echo "Rlease run as root"
+    echo "Please run as root"
     exit 1
 fi
 
 if [ ${NEED_RESPIN_RPMS} = true ]; then
 
     # IT WILL BE OK TO DOWNLOAD PACKAGES FOR RESPIN
-
-    if [ ! -f ${GIGAOS_RESPIN_SCRIPT} ]; then
-        echo "Unable to find script ${GIGAOS_RESPIN_SCRIPT}"
-        exit 1
-    fi
 
     if [ ! -d ${GIGAOS_RESPIN_FROLDER_WITH_SRPMS} ]; then
         mkdir -p ${GIGAOS_RESPIN_FROLDER_WITH_SRPMS}
@@ -65,29 +60,36 @@ if [ ${NEED_RESPIN_RPMS} = true ]; then
     echo "Remove ${GIGAOS_RESPIN_BUILD_DIR}" if exists
     rm -rf ${GIGAOS_RESPIN_BUILD_DIR}
 
-    #create working dirs
-    mkdir -p "${FULL_BUILD_RPMS_DIR}"/{BUILD,RPMS,SOURCE,SPECS,SRPMS,BUILDROOT}
+    mkdir -p "${GIGAOS_RESPIN_RESULT_DIR}"
 
-    # rewrite macros file
-    echo '%_topdir %(echo $FULL_BUILD_RPMS_DIR)' > ~/.rpmmacros
-    echo '%_builddir %{_topdir}/BUILD' >> ~/.rpmmacros
-    echo '%_rpmdir %{_topdir}/RPMS' >> ~/.rpmmacros
-    echo '%_sourcedir %{_topdir}/SOURCE' >> ~/.rpmmacros
-    echo '%_specdir %{_topdir}/SPECS' >> ~/.rpmmacros
-    echo '%_srcrpmdir %{_topdir}/SRPMS' >> ~/.rpmmacros
-    echo '%_buildrootdir %{_topdir}/BUILDROOT' >> ~/.rpmmacros
-    echo '%_tpmpath %{_topdir}/tmp' >> ~/.rpmmacros
+    # create build user
+    if [[ ! $(grep ${GIGAOS_RESPIN_BUILD_USERNAME} /etc/passwd) ]]; then
+        useradd -m ${GIGAOS_RESPIN_BUILD_USERNAME} -c "User to build rpms"
+    fi
+
+    # create working folders
+    rm -rf /home/${GIGAOS_RESPIN_BUILD_USERNAME}/rpmbuild
+
+    # this creates the forlers structure and macros file for build user
+    rm /home/${GIGAOS_RESPIN_BUILD_USERNAME}/.rpmmacros
+    sudo -u ${GIGAOS_RESPIN_BUILD_USERNAME} /usr/bin/rpmdev-setuptree
+
+    # add rmpbuild macroses
+    sudo -u ${GIGAOS_RESPIN_BUILD_USERNAME} echo '%_sourcedir %{_topdir}/SOURCE' >> /home/${GIGAOS_RESPIN_BUILD_USERNAME}/.rpmmacros
+    sudo -u ${GIGAOS_RESPIN_BUILD_USERNAME} echo '%_specdir %{_topdir}/SPECS' >> /home/${GIGAOS_RESPIN_BUILD_USERNAME}/.rpmmacros
+    sudo -u ${GIGAOS_RESPIN_BUILD_USERNAME} echo '%_builddir %{_topdir}/BUILD' >> /home/${GIGAOS_RESPIN_BUILD_USERNAME}/.rpmmacros
+    sudo -u ${GIGAOS_RESPIN_BUILD_USERNAME} echo "%dist .${GIGAOS_RESPIN_DISTRIBUTIVE}" >> /home/${GIGAOS_RESPIN_BUILD_USERNAME}/.rpmmacros
+    sudo -u ${GIGAOS_RESPIN_BUILD_USERNAME} echo "%vendor ${GIGAOS_RESPIN_VENDOR}" >> /home/${GIGAOS_RESPIN_BUILD_USERNAME}/.rpmmacros
+
 
     # copy SRPMS to build dir
-    rsync -avP "${GIGAOS_RESPIN_FROLDER_WITH_SRPMS}"/ "${FULL_BUILD_RPMS_DIR}"/SRPMS
+    rsync -avP "${GIGAOS_RESPIN_FROLDER_WITH_SRPMS}"/ /home/${GIGAOS_RESPIN_BUILD_USERNAME}/rpmbuild/SRPMS
 
     # get list of packages and rebuild it one by one
-    CH_DIR="${FULL_BUILD_RPMS_DIR}/SRPMS"
+    SEARCH_DIR="/home/${GIGAOS_RESPIN_BUILD_USERNAME}/rpmbuild/SRPMS"
 
     echo "Search dir: ${SEARCH_DIR}"
     cd "${SEARCH_DIR}"
-
-    chmod -p "${GIGAOS_RESPIN_RESULT_DIR}"
 
     PACKAGE_COUNT=0
     for PACKAGE in "${SEARCH_DIR}"/*.rpm;
@@ -98,23 +100,36 @@ if [ ${NEED_RESPIN_RPMS} = true ]; then
         echo "RWD: ${PWD}"
 
         # install dependencies
-        #yum install -y $(rpmbuild --sign --rebuild ${PACKAGE_FILE} | fgrep 'is needed by' | awk '{print $1}')
-        yum-builddep -y -v ${PACKAGE_FILE}
-        rpmbuild --rebuild ${PACKAGE_FILE}
+        sudo -u ${GIGAOS_RESPIN_BUILD_USERNAME} yum-builddep -y -v ${PACKAGE_FILE}
+        sudo -u ${GIGAOS_RESPIN_BUILD_USERNAME} rpmbuild --rebuild ${PACKAGE_FILE}
 
-        rsync -avP ${FULL_BUILD_RPMS_DIR}/RPMS/${GIGAOS_BUILD_ISO_DIST_MACHINE}/* ${GIGAOS_RESPIN_RESULT_DIR}/
-        rsync -avP ${FULL_BUILD_RPMS_DIR}/RPMS/noarch/* ${GIGAOS_RESPIN_RESULT_DIR}/
+        if [ -d "/home/${GIGAOS_RESPIN_BUILD_USERNAME}/rpmbuild/RPMS/${GIGAOS_BUILD_ISO_DIST_MACHINE}" ]; then
+            rsync -avP /home/${GIGAOS_RESPIN_BUILD_USERNAME}/rpmbuild/RPMS/${GIGAOS_BUILD_ISO_DIST_MACHINE}/* ${GIGAOS_RESPIN_RESULT_DIR}/
+        else
+            echo "Directory /home/${GIGAOS_RESPIN_BUILD_USERNAME}/rpmbuild/RPMS/${GIGAOS_BUILD_ISO_DIST_MACHINE} does not exists"
+        fi
 
+        if [ -d "/home/${GIGAOS_RESPIN_BUILD_USERNAME}/rpmbuild/RPMS/noarch" ]; then
+            rsync -avP /home/${GIGAOS_RESPIN_BUILD_USERNAME}/rpmbuild/RPMS/noarch/* ${GIGAOS_RESPIN_RESULT_DIR}/
+        else
+            echo "Directory
+            /home/${GIGAOS_RESPIN_BUILD_USERNAME}/rpmbuild/RPMS/noarch/ does not exists"
+        fi
+
+        # remove old data
         rm -f ${PACKAGE_FILE}
-        rm -rf ${FULL_BUILD_RPMS_DIR}/BUILD/*
-        rm -rf ${FULL_BUILD_RPMS_DIR}/SOURCE/*
-        rm -rf ${FULL_BUILD_RPMS_DIR}/SPECS/*
-        rm -rf ${FULL_BUILD_RPMS_DIR}/BUILDROOT/*
+        rm -rf /home/${GIGAOS_RESPIN_BUILD_USERNAME}/rpmbuild/BUILD/*
+        rm -rf /home/${GIGAOS_RESPIN_BUILD_USERNAME}/rpmbuild/SOURCE/*
+        rm -rf /home/${GIGAOS_RESPIN_BUILD_USERNAME}/rpmbuild/SPECS/*
+        rm -rf /home/${GIGAOS_RESPIN_BUILD_USERNAME}/rpmbuild/BUILDROOT/*
         echo "------------------------------"
+
         ((PACKAGE_COUNT++))
     done
 
-    echo "Was builded ${PACKAGE_COUNT} package(s)..."
+    echo "Was builded ${PACKAGE_COUNT} package(s) and copied to ${GIGAOS_RESPIN_RESULT_DIR}"
+
+    # NEED TO DELETE SPM BUILD USER ACCOUNT AFTER BUILD
 
     cd ${GIGAOS_ROOT_DIR}
 fi
