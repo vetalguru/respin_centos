@@ -16,6 +16,8 @@
 
 source ./config.cfg
 
+# set log file
+exec > >(tee -i ${GIGAOS_LOG_FILE})
 
 # NEED PROCESS COMMAND LINE PARAMETERS
 # COMMAND LINE PARAMETERS
@@ -101,7 +103,7 @@ if [ ${NEED_RESPIN_RPMS} = true ]; then
 
         # install dependencies
         sudo -u ${GIGAOS_RESPIN_BUILD_USERNAME} yum-builddep -y -v ${PACKAGE_FILE}
-        sudo -u ${GIGAOS_RESPIN_BUILD_USERNAME} rpmbuild --rebuild ${PACKAGE_FILE}
+        sudo -u ${GIGAOS_RESPIN_BUILD_USERNAME} rpmbuild --rebuild --clean ${PACKAGE_FILE}
 
         if [ -d "/home/${GIGAOS_RESPIN_BUILD_USERNAME}/rpmbuild/RPMS/${GIGAOS_BUILD_ISO_DIST_MACHINE}" ]; then
             rsync -avP /home/${GIGAOS_RESPIN_BUILD_USERNAME}/rpmbuild/RPMS/${GIGAOS_BUILD_ISO_DIST_MACHINE}/* ${GIGAOS_RESPIN_RESULT_DIR}/
@@ -192,7 +194,7 @@ if [ ${NEED_BUILD_OS} = true ]; then
         fi
 
         # parce result file
-        FULL_TC_BUILD_NAME=`xmllint --xpath "string(//build/@number)" ${APPASSURE_PACKAGES_HTTP_ADDR_BUILD_VERSION_FILE}`
+        FULL_TC_BUILD_NAME=$(xmllint --xpath "string(//build/@number)" ${APPASSURE_PACKAGES_HTTP_ADDR_BUILD_VERSION_FILE})
         echo "${FULL_TC_BUILD_NAME}" > ${APPASSURE_PACKAGES_HTTP_ADDR_BUILD_VERSION_FILE}
 
         # need to parse build version file
@@ -626,7 +628,12 @@ EOF
 
         mkdir -p ${GIGAOS_BUILD_ISO_BUILD_RESPIN_DIR}
 
-        # NEED TO CHECK IF EXISTS
+        # check if respin dir exists
+        if [ ! -d ${GIGAOS_RESPIN_RESULT_DIR} ]; then
+            echo "Unable to find ${GIGAOS_RESPIN_RESULT_DIR}"
+            exit 1
+        fi
+
         rsync -avP ${GIGAOS_RESPIN_RESULT_DIR}/ ${GIGAOS_BUILD_ISO_BUILD_RESPIN_DIR}/
 
         # GigaOS will need to have own versuin of thes pacakges
@@ -843,7 +850,7 @@ EOF
     vmrun -T ws start "${GIGAOS_BUILD_OVF_VMX_FILE}" nogui
 
     # check if started
-    vm_run=`vmrun list | grep ${GIGAOS_BUILD_OVF_VMX_FILE}`
+    vm_run=$(vmrun list | grep ${GIGAOS_BUILD_OVF_VMX_FILE})
     if [[ -z $vm_run ]]; then
         echo "Virtual machine ${GIGAOS_BUILD_OVF_VMX_FILE} was not started"
         exit 1
@@ -855,7 +862,7 @@ EOF
     tmp_time=${GIGAOS_BUILD_OVF_MAX_TIMEOUT_TO_CHECK_INSTALLATION}
     while true
     do
-        vm_run=`vmrun list | grep ${GIGAOS_BUILD_OVF_VMX_FILE}`
+        vm_run=$(vmrun list | grep ${GIGAOS_BUILD_OVF_VMX_FILE})
         if [[ -z $vm_run ]]; then
             echo "Virtual machine ${GIGAOS_BUILD_OVF_VMX_FILE} was stopped"
             break
