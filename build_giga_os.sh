@@ -21,10 +21,10 @@ exec > >(tee -i ${GIGAOS_LOG_FILE})
 
 # NEED PROCESS COMMAND LINE PARAMETERS
 # COMMAND LINE PARAMETERS
-NEED_RESPIN_RPMS=true
+NEED_RESPIN_RPMS=false
 NEED_REPACK_STAGE=false
-NEED_BUILD_OS=false
-NEED_TO_USE_RESPIN_RPMS=false
+NEED_BUILD_OS=true
+NEED_TO_USE_RESPIN_RPMS=true
 NEED_TO_INSTALL_APPASSURE_AGENT=false
 NEED_CREATE_OVF=false
 
@@ -623,7 +623,7 @@ EOF
     # copy rpms
     rsync -avP ${GIGAOS_BUILD_ISO_MOUNT_POINT}/Packages/ ${GIGAOS_BUILD_ISO_ROOT_ISO}/Packages/
 
-    if [ NEED_TO_USE_RESPIN_RPMS = true ]; then
+    if [ ${NEED_TO_USE_RESPIN_RPMS} = true ]; then
         echo "Need to use respin rpms"
 
         mkdir -p ${GIGAOS_BUILD_ISO_BUILD_RESPIN_DIR}
@@ -680,10 +680,13 @@ EOF
         done
 
         # copy respin rpms to iso-disk packages
-        rsync -avP ${GIGAOS_BUILD_ISO_BUILD_RESPIN_DIR} ${GIGAOS_BUILD_ISO_ROOT_ISO}/Packages/
+        rsync -avP ${GIGAOS_BUILD_ISO_BUILD_RESPIN_DIR}/ ${GIGAOS_BUILD_ISO_ROOT_ISO}/Packages/
 
+        # NEED TO CREATE NEW REPO (need remove comps.xml)
+        # delete old data
+        rm -f ${GIGAOS_BUILD_ISO_ROOT_ISO}/comps.xml
+        rm -rf ${GIGAOS_BUILD_ISO_ROOT_ISO}/repodata
     fi
-
 
     # create repodata
     cd ${GIGAOS_BUILD_ISO_ROOT_ISO}/
